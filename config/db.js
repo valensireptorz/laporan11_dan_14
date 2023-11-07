@@ -1,17 +1,19 @@
-let mysql = require('mysql'); //import library mysql
-let connection = mysql.createConnection({
-    host: 'localhost',
-    user: 'root',
-    password: '',
-    database: 'db_express_s3'
+let msyql = require('mysql'); // import library mysql
+// membuat varibale connection yang isinya konfihurasi dari koneksi database msyql
+let connection = msyql.createConnection({
+    host:   'localhost',
+    user:   'root',
+    password:   '',
+    database:   'db_express_s3'
 });
 
-connection.connect(function(error){
+//membuat kondisi untuk melihat apakah koneksi berjalan atau tidak
+connection.connect(function (error) {
     if(!!error){
         console.log(error)
-    } else{
-        console.log('koneksi berhasil');
+    }else{
+        console.log('Koneksi berhasil');
     }
 })
-
+// kita export module connection agar bisa digunakan di file lain
 module.exports = connection;

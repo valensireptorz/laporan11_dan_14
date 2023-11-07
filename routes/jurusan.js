@@ -118,5 +118,5 @@ router.delete('/jurusan/(:id)', function(req, res){
             })
         }
     })
-})
+}) 
 module.exports = router;

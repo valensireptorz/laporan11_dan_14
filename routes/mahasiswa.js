@@ -29,9 +29,7 @@ const fileFilter = (req, file, cb) => {
 const upload = multer({storage: storage, fileFilter: fileFilter})
 
 router.get('/mahasiswa', function (req, res){
-    connection.query('SELECT m.id_m, m.nama, m.nrp, j.nama_jurusan ' +
-                    'FROM mahasiswa m ' +
-                    'JOIN jurusan j ON m.id_jurusan = j.id_j', function(err, rows){
+    connection.query('SELECT a.id_m,a.nama,a.nrp, b.nama_jurusan AS jurusan, a.gambar, a.swa_foto FROM mahasiswa a JOIN jurusan b ON b.id_j = a.id_jurusan ORDER BY a.id_m DESC;', function(err, rows){
         if(err){
             return res.status(500).json({
                 status: false,
@@ -47,7 +45,7 @@ router.get('/mahasiswa', function (req, res){
     });
 });
 
-router.post('/mahasiswa', upload.single("gambar") , [
+router.post('/upload',upload.fields([{ name: 'gambar', maxCount: 1 }, { name: 'swa_foto', maxCount: 1 }]),[
     //validation
     body('nama').notEmpty(),
     body('nrp').notEmpty(),
@@ -63,7 +61,9 @@ router.post('/mahasiswa', upload.single("gambar") , [
         nama: req.body.nama,
         nrp: req.body.nrp,
         id_jurusan: req.body.id_jurusan,
-        gambar: req.file.filename
+        gambar: req.files.gambar[0].filename, 
+        swa_foto: req.files.swa_foto[0].filename 
+
     }
     connection.query('insert into mahasiswa set ?', Data, function(err, rows){
         if(err){
@@ -105,109 +105,148 @@ router.get('/:id', function (req, res) {
     });
 });
 
-router.patch('/update/:id', upload.single("gambar") , [
-    body('nama').notEmpty(),
-    body('nrp').notEmpty(),
-    body('id_jurusan').notEmpty()
-], (req, res) => {
-    const error = validationResult(req);
-    if(!error.isEmpty()){
-        return res.status(422).json({
-            error: error.array()
-        });
+router.patch(
+  "/update/:id",
+  upload.fields([
+    { name: "gambar", maxCount: 1 },
+    { name: "swa_foto", maxCount: 1 },
+  ]),
+  [
+    body("nama").notEmpty(),
+    body("nrp").notEmpty(),
+    body("id_jurusan").notEmpty(),
+  ],
+  (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(422).json({
+        errors: errors.array(),
+      });
     }
-    let id = req.params.id;
-     // Lakukan pengecekan apakah ada file yang diunggah
-    let gambar = req.file ? req.file.filename : null;
 
-    connection.query(`select * from mahasiswa where id_m = ${id}`, function (err, rows) {
-        if(err){
-            return res.status(500).json({
-                status: false,
-                message: 'Server Error',
-            })
-        }
-        if(rows.length ===0){
-            return res.status(404).json({
-                status: false,
-                message: 'Not Found',
-            })
-        }
-        const namaFileLama = rows[0].gambar;
+    const id = req.params.id;
 
-        // Hapus file lama jika ada
-        if (namaFileLama && gambar) {
-            const pathFileLama = path.join(__dirname, '../public/images', namaFileLama);
-            fs.unlinkSync(pathFileLama);
+    const gambar = req.files["gambar"] ? req.files["gambar"][0].filename : null;
+    const swa_foto = req.files["swa_foto"]
+      ? req.files["swa_foto"][0].filename
+      : null;
+
+    connection.query(
+      `SELECT * FROM mahasiswa WHERE id_m = ${id}`,
+      function (err, rows) {
+        if (err) {
+          return res.status(500).json({
+            status: false,
+            message: "Server Error",
+          });
+        }
+        if (rows.length === 0) {
+          return res.status(404).json({
+            status: false,
+            message: "Not Found",
+          });
+        }
+
+        const gambarLama = rows[0].gambar;
+        const swa_fotoLama = rows[0].swa_foto;
+
+        if (gambarLama && gambar) {
+          const pathGambar = path.join(
+            __dirname,
+            "../public/images",
+            gambarLama
+          );
+          fs.unlinkSync(pathGambar);
+        }
+        if (swa_fotoLama && gambar) {
+          const pathSwa = path.join(
+            __dirname,
+            "../public/images",
+            swa_fotoLama
+          );
+          fs.unlinkSync(pathSwa);
         }
 
         let Data = {
-            nama: req.body.nama,
-            nrp: req.body.nrp,
-            id_jurusan: req.body.id_jurusan,
-            gambar: gambar
+          nama: req.body.nama,
+          nrp: req.body.nrp,
+          id_jurusan: req.body.id_jurusan,
+        };
+
+        if (gambar) {
+          Data.gambar = gambar;
         }
-        connection.query(`update mahasiswa set ? where id_m = ${id}`, Data, function (err, rows) {
-            if(err){
-                return res.status(500).json({
-                    status: false,
-                    message: 'Server Error',
-                })
+        if (swa_foto) {
+          Data.swa_foto = swa_foto;
+        }
+
+        connection.query(
+          `UPDATE mahasiswa SET ? WHERE id_m = ${id}`,
+          Data,
+          function (err, result) {
+            if (err) {
+              return res.status(500).json({
+                status: false,
+                message: "Server Error",
+              });
             } else {
-                return res.status(200).json({
-                    status: true,
-                    message: 'Update Success..!'
-                })
+              return res.status(200).json({
+                status: true,
+                message: "Update Sukses..!",
+              });
             }
-        })
+          }
+        );
+      }
+    );
+  }
+);
 
-    })
-
-    
-    
-})
-
-
-router.delete('/delete/(:id)', function(req, res){
-    let id = req.params.id;
-
-    connection.query(`select * from mahasiswa where id_m = ${id}`, function (err, rows) {
-        if(err){
-            return res.status(500).json({
-                status: false,
-                message: 'Server Error',
-            })
+  router.delete('/delete/:id', (req, res) => {
+    const id = req.params.id;
+  
+    connection.query(`SELECT * FROM mahasiswa WHERE id_m = ${id}`, (err, rows) => {
+      if (err) {
+        return res.status(500).json({
+          status: false,
+          message: 'Server Error',
+        });
+      }
+      if (rows.length === 0) {
+        return res.status(404).json({
+          status: false,
+          message: 'Not Found',
+        });
+      }
+  
+      const namaFileLama = rows[0].gambar;
+      const swa_fotoLama = rows[0].swa_foto;
+  
+      connection.query(`DELETE FROM mahasiswa WHERE id_m = ${id}`, (err, result) => {
+        if (err) {
+          return res.status(500).json({
+            status: false,
+            message: 'Server Error',
+          });
         }
-        if(rows.length ===0){
-            return res.status(404).json({
-                status: false,
-                message: 'Not Found',
-            })
-        }
-        const namaFileLama = rows[0].gambar;
-
-        
+  
+        // Hapus file gambar jika ada
         if (namaFileLama) {
-            const pathFileLama = path.join(__dirname, '../public/images', namaFileLama);
-            fs.unlinkSync(pathFileLama);
+          const pathFileLama = path.join(__dirname, '../public/images', namaFileLama);
+          fs.unlinkSync(pathFileLama);
         }
-
-        
-        connection.query(`delete from mahasiswa where id_m = ${id}`, function (err, rows) {
-            if(err){
-                return res.status(500).json({
-                    status: false,
-                    message: 'Server Error',
-                })
-            }else{
-                return res.status(200).json({
-                    status: true,
-                    message: 'Data has ben delete !',
-                })
-            }
-        })
-
-    })
-    
-})
+  
+        // Hapus file swa_foto jika ada
+        if (swa_fotoLama) {
+          const pathSwaFotoLama = path.join(__dirname, '../public/images', swa_fotoLama);
+          fs.unlinkSync(pathSwaFotoLama);
+        }
+  
+        return res.status(200).json({
+          status: true,
+          message: 'Data has been deleted!',
+        });
+      });
+    });
+  });
 module.exports = router;
